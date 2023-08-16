@@ -63,7 +63,7 @@ pub mod hist_noise {
     use super::*;
     use rand_distr::{Distribution, Exp, Normal};
 
-    pub(crate) trait NoiseDistribution: Distribution<usize> + Copy {
+    pub trait NoiseDistribution: Distribution<usize> + Copy {
         /// Returns the shift parameter m.
         fn m(&self) -> i64;
 
@@ -191,7 +191,6 @@ pub mod hist_noise {
     }
 }
 
-#[cfg(test)]
 pub(crate) mod zipf {
     use super::*;
     use ::zipf::ZipfDistribution as RegularZipfDistribution;

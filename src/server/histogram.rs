@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::iter::Iterator;
 use std::rc::Rc;
 
-pub(crate) struct Histogram {
+pub struct Histogram {
     schema: Schema,
     attr_name: String,
     attr_type: AttributeType,
@@ -20,7 +20,7 @@ impl Histogram {
     /// Create a new `Histogram` from a `Schema`, an attribute name, and
     /// a vector of attribute values. Each attribute count is corrected by
     /// adding `m` to it.
-    pub(crate) fn new(
+    pub fn new(
         schema: &Schema,
         attr_name: &str,
         attr_values_iter: impl ExactSizeIterator<Item = AttrValueType>,

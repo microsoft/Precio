@@ -2,7 +2,8 @@
 // Licensed under the MIT license.
 
 use num_modular::{ModularCoreOps, ModularUnaryOps};
-use num_traits::{One, WrappingAdd, WrappingSub, Zero};
+pub use num_traits::{One, Zero};
+use num_traits::{WrappingAdd, WrappingSub};
 use std::cmp::PartialOrd;
 use std::fmt::Debug;
 use std::ops::BitAnd;

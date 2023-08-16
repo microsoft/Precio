@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// of a bit-field encoding multiple attributes of different sizes. The attribute
 /// sizes are not encoded in the `Report` itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Report<const U32_SIZE: usize> {
+pub struct Report<const U32_SIZE: usize> {
     #[serde(with = "serde_arrays")]
     data: [u32; U32_SIZE],
 }
@@ -29,7 +29,7 @@ impl<const U32_SIZE: usize> Report<U32_SIZE> {
     }
 
     /// Creates a new `Report` by setting its u32 parts to given values.
-    pub(crate) fn from_u32_slice(value: &[u32]) -> Self {
+    pub fn from_u32_slice(value: &[u32]) -> Self {
         assert!(
             value.len() <= U32_SIZE,
             "Report::from_u32_slice: slice length is greater than the report size"
@@ -50,7 +50,7 @@ impl<const U32_SIZE: usize> Report<U32_SIZE> {
     }
 
     /// Return the `Report` as a u32 slice.
-    pub(crate) fn as_u32_slice(&self) -> &[u32] {
+    pub fn as_u32_slice(&self) -> &[u32] {
         &self.data
     }
 }

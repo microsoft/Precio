@@ -104,8 +104,8 @@ All three servers need to decide on an attribute name from the schema for which 
 Most of the server functions discussed below require the name of the current attribute to be given as a parameter.
 
 Both `Server1` and `Server2`, *i.e.*, servers with `Role::First` and `Role::Second`, respectively, call `Server::add_noise_reports`.
-The function also expects two noise distribution objects, which can be instances of either `random::hist_noise::Laplace` or `random::hist_noise::Gaussian`, depending on the kind of differential privacy mechanism the user wants to use.
-Setting up the noise distributions is in principle straightforward, but requires the user to specify truncation points `m` in addition to the distribution parameters.
+The function also expects two noise distribution objects, which can be instances of either `hist_noise::Laplace` or `hist_noise::Gaussian`, depending on the kind of differential privacy mechanism the user wants to use.
+Setting up the noise distributions is in principle straightforward, but requires the user to specify a truncation point `m` in addition to the distribution parameters.
 We refer the reader to [eprint.iacr.org/2021/1490](https://eprint.iacr.org/2021/1490) for more information on how to choose these distributions.
 The `add_noise_reports` functions returns the number of noise reports that were added; both servers need to exchange these numbers for the next step.
 
@@ -159,7 +159,7 @@ To reveal the shares, they call `Server::reveal_attr(&mut self, attr_name: &str,
 It is often not meaningful to maintain all reports, especially if the attribute value distribution has a long tail.
 In this case, both `Server1` and `Server2` can at this point call `Server::prune(&mut self, attr_name: &str, threshold: usize)`, which removes all reports with an attribute value such that it appear with a count of less than `threshold`.
 
-Now `Server1` is ready to create a `server::histogram::Histogram` object representing a histogram (for this attribute) for their reports.
+Now `Server1` is ready to create a `server::Histogram` object representing a histogram (for this attribute) for their reports.
 They do this by calling `Server::make_histogram(&self, attr_name: &str, m: i64, prune_threshold: usize)`.
 Here `m` is the same truncation point that was used in creating the noise distribution earlier and `prune_threshold` should be the same as the `threshold` specified earlier when calling the `Server::prune` function.
 The functions returns an `Rc<RefCell<Histogram>>`, wrapped in a `Result`.
@@ -185,7 +185,8 @@ It is much simpler, consisting of just a few back-and-forth communications betwe
 
 First, the three servers need to agree upon a *summation modulus*; an odd positive integer modulo which the sum is computed.
 In practice, this should be either a 32-bit or 64-bit integer, depending on which one is needed to hold the expected aggregate value.
-The type for the summation modulus is hard-coded in the beginning of `[src/server/server.rs](src/server/server.rs)`.
+By default, the summation modulus is a `u32`.
+To change it into a `u64`, enable the feature `wide_summation_modulus`.
 
 Next the servers must perform the following sequence of operations:
 ```rust
@@ -243,32 +244,31 @@ server3.summation_finalize();
 In the end, `Server1` and `Server2` output numbers modulo the summation modulus,
 whereas `Server3` outputs nothing.
 Both `Server1` and `Server2` need to use standard differential privacy techniques to add noise to their result to achieve differential privacy for the output.
-Note that they should not use the distributions in `random::hist_noise`, as those are special truncated shifted noise distributions meant to be used by the histogram protocol.
+Note that they should not use the distributions `hist_noise::Laplace` or `hist_noise::Gaussian`, as those are special truncated shifted noise distributions meant to be used by the histogram protocol.
 Finally, `Server2` sends it differentially private output to `Server1`, who reveals the result by adding the two numbers modulo the summation modulus.
-For the modular addition, you can use `u32::add_mod` or `u64::add_mod`, defined in [src/arith.rs](src/arith.rs).
+For the modular addition, you can use `u32::add_mod` or `u64::add_mod` by using `arith::Modulus` (see [src/arith.rs](src/arith.rs)).
 
 ## Examples
 The above explanation of the core APIs omits many details.
-However, each `.rs` file includes tests for the functionalities defined in it.
-In particular, [src/server/server.rs](src/server/server.rs) demonstrates complete examples of using Precio.
+However, each `.rs` file includes tests for the functionalities defined in it, and [tests/](tests/) includes multiple complete examples of using Precio.
 
 **IMPORTANT: The hard-coded protocol parameters in these examples are not intended to be secure.
 The examples merely demonstrate how to use the library.
 To learn how to set secure parameters, please see [eprint.iacr.org/2021/1490](https://eprint.iacr.org/2021/1490).**
 
-The following examples are the most relevant ones, all contained in [src/server/server.rs](src/server/server.rs):
-1. `server::server::tests::test_layered_histogram` demonstrates building a few layers of a layered histogram for artificially generated test data.
-1. `server::server::tests::full_histogram_exploration` computes a full private histogram, *i.e.*, all possible paths, for artificially generated test data.
+The following examples are the most relevant ones, all in [tests/](tests/):
+1. `layered_histogram` demonstrates building a few layers of a layered histogram for artificially generated test data.
+1. `full_histogram_exploration` computes a full private histogram, *i.e.*, all possible paths, for artificially generated test data.
 The test can easily be modified; for example, one may want to change the number of clients (`report_count`), the test data distribution (`zipf_parameter`), the noise distibutions (`noise_distr` and `noise_distr_dummy`).
 The schema can be changed as well, but make sure to set the `U32_COUNT` value to be such that the sum of the attribute bit-sizes in the schema is no larger than `32 * U32_COUNT`.
 Note that this test only handles categorical attributes.
 Finally, you can change `reports_prune_threshold` and `histogram_prune_threshold` to change the pruning behavior.
 Setting these to zero results in an exact (up to differential privacy) histogram.
-1. `server::server::tests::full_histogram_exploration_from_file` is the same as `full_histogram_exploration`, but it reads the client reports from a JSON file called `full_histogram.json` instead of generating test data.
+1. `full_histogram_exploration_from_file` is the same as `full_histogram_exploration`, but it reads the client reports from a JSON file called `full_histogram.json` instead of generating test data.
 The format of this input file was described in above in [Client](#client).
-1. `server::server::tests::heavy_hitter` demonstrates finding the most frequently occurring report, the *heavy hitter* from a set of reports.
-1. `server::server::tests::heavy_hitter_from_file` is the same as `heavy_hitter`, but it reads the client reports from a JSON file called `heavy_hitter.json` instead of generating test data.
-1. `server::server::tests::histogram_with_summation` demonstrates a few runs of the sum protocol interleaved with layered histogram exploration.
+1. `heavy_hitter` demonstrates finding the most frequently occurring report, the *heavy hitter* from a set of reports.
+1. `heavy_hitter_from_file` is the same as `heavy_hitter`, but it reads the client reports from a JSON file called `heavy_hitter.json` instead of generating test data.
+1. `histogram_with_summation` demonstrates a few runs of the sum protocol interleaved with layered histogram exploration.
 
 To run these examples, just use `cargo test <example_name>`, but remember to use the `--release` switch if you hope to measure timings.
 The examples also print some information to stdout, including communication and timing measurements, which you can see by running the tests with `--nocapture`.

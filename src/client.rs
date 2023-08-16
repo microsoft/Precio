@@ -2,7 +2,7 @@
 // Licensed under the MIT license.
 
 use crate::report::report_handler::ReportHandler;
-pub use crate::report::report_vector::ReportVector;
+use crate::report::report_vector::ReportVector;
 use crate::schema::{Attribute, Schema};
 use rand::Rng;
 use serde::{Deserialize, Serialize};

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::mem::size_of;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ReportHandler<const U32_SIZE: usize> {
+pub struct ReportHandler<const U32_SIZE: usize> {
     attr_types: Vec<AttributeType>,
     attr_sizes: Vec<usize>,
     attr_offsets: Vec<usize>,
@@ -198,7 +198,7 @@ impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
     }
 
     /// Set an attribute value in a given `Report`.
-    pub(crate) fn set_attr(
+    pub fn set_attr(
         &self,
         report: &mut Report<U32_SIZE>,
         attr_index: usize,
@@ -221,7 +221,7 @@ impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
     }
 
     /// Creates a new `Report` with given attribute values.
-    pub(crate) fn create_report(&self, attr_values: &[AttrValueType]) -> Report<U32_SIZE> {
+    pub fn create_report(&self, attr_values: &[AttrValueType]) -> Report<U32_SIZE> {
         assert!(attr_values.len() <= self.attr_sizes.len(),
             "ReportHandler::create_report: Number of attribute values must match number of attributes.");
 

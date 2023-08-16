@@ -6,8 +6,8 @@ use rand::Rng;
 use std::cmp::min;
 
 /// Represents the value for an attribute.
-pub(crate) type AttrValueType = u32;
-pub(crate) const MAX_ATTR_BIT_SIZE: usize = 32;
+pub type AttrValueType = u32;
+pub const MAX_ATTR_BIT_SIZE: usize = 32;
 
 /// Create a random attribute value. A zero `modulus` indicates
 /// a categorical attribute value. Otherwise the returned value is

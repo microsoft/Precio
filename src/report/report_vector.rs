@@ -17,7 +17,7 @@ pub struct ReportVector<const U32_SIZE: usize> {
     reports: Vec<Report<U32_SIZE>>,
 }
 
-pub(crate) struct ReportVectorIterator<'a, const U32_SIZE: usize> {
+pub struct ReportVectorIterator<'a, const U32_SIZE: usize> {
     inner: std::slice::Iter<'a, Report<U32_SIZE>>,
 }
 
@@ -37,14 +37,14 @@ impl<'a, const U32_SIZE: usize> ExactSizeIterator for ReportVectorIterator<'a, U
 
 impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     /// Iterate over the `Report`s in the `ReportVector`.
-    pub(crate) fn iter(&self) -> ReportVectorIterator<U32_SIZE> {
+    pub fn iter(&self) -> ReportVectorIterator<U32_SIZE> {
         ReportVectorIterator {
             inner: self.reports.iter(),
         }
     }
 
     /// Create a new `ReportVector`.
-    pub(crate) fn new(attr_types: &[AttributeType]) -> Self {
+    pub fn new(attr_types: &[AttributeType]) -> Self {
         Self {
             report_handler: ReportHandler::new(attr_types),
             reports: Vec::new(),
@@ -78,12 +78,12 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     }
 
     /// Add a `Report` to the `ReportVector`. Panics if the `Report` is invalid.
-    pub(crate) fn push(&mut self, report: Report<U32_SIZE>) {
+    pub fn push(&mut self, report: Report<U32_SIZE>) {
         self.push_many(report, 1)
     }
 
     /// Remove the last `Report` from the `ReportVector`. Return `None` if the `ReportVector` is empty.
-    pub(crate) fn pop(&mut self) -> Option<Report<U32_SIZE>> {
+    pub fn pop(&mut self) -> Option<Report<U32_SIZE>> {
         self.reports.pop()
     }
 
@@ -102,17 +102,17 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     }
 
     /// Get the number of `Report`s in the `ReportVector`.
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.reports.len()
     }
 
     /// Get the `ReportHandler` for the `ReportVector`.
-    pub(crate) fn report_handler(&self) -> &ReportHandler<U32_SIZE> {
+    pub fn report_handler(&self) -> &ReportHandler<U32_SIZE> {
         &self.report_handler
     }
 
     /// Return an iterator to the attributes for every `Report` in the `ReportVector`.
-    pub(crate) fn get_attr_iter(
+    pub fn get_attr_iter(
         &self,
         attr_index: usize,
     ) -> impl ExactSizeIterator<Item = AttrValueType> + '_ {
@@ -123,7 +123,7 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     }
 
     /// Set a particular attribute to a given value for every `Report` in the `ReportVector`.
-    pub(crate) fn set_attr(&mut self, attr_index: usize, attr_value: AttrValueType) {
+    pub fn set_attr(&mut self, attr_index: usize, attr_value: AttrValueType) {
         self.reports
             .iter_mut()
             .for_each(|report| self.report_handler.set_attr(report, attr_index, attr_value));
@@ -148,7 +148,7 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
 
     /// Combine shares of two `ReportVector`s together. Categorical attributes are XORed
     /// and numerical attributes are added modulo their respective moduli.
-    pub(crate) fn reveal(&mut self, other: Self) {
+    pub fn reveal(&mut self, other: Self) {
         assert_eq!(
             self.reports.len(),
             other.reports.len(),
@@ -188,7 +188,7 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     /// Return the random `Report`s. The created reports are subtracted from this vector.
     /// Categorical attributes are XORed and numerical attributes are subtracted modulo
     /// their respective moduli.
-    pub(crate) fn share<R: Rng + ?Sized>(&mut self, rng: &mut R) -> ReportVector<U32_SIZE> {
+    pub fn share<R: Rng + ?Sized>(&mut self, rng: &mut R) -> ReportVector<U32_SIZE> {
         Self {
             report_handler: self.report_handler.clone(),
             reports: self
@@ -202,7 +202,7 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     /// Remove every `Report` where the value of a given attribute is either
     /// the dummy value (all ones) or the value appears fewer than a threshold
     /// many times. Returns the number of `Report`s removed.
-    pub(crate) fn prune(&mut self, attr_index: usize, threshold: usize) -> usize {
+    pub fn prune(&mut self, attr_index: usize, threshold: usize) -> usize {
         let attr_type = self.report_handler.get_attr_types()[attr_index];
         assert!(
             attr_type.is_categorical(),
@@ -228,7 +228,7 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     }
 
     /// Remove an attribute from every `Report` in the `ReportVector`.
-    pub(crate) fn remove_attr(&mut self, attr_index: usize) {
+    pub fn remove_attr(&mut self, attr_index: usize) {
         // First set all of the attribute values to zero.
         self.reports
             .iter_mut()
@@ -239,7 +239,7 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     }
 
     /// Split off all reports with the given categorical attribute value.
-    pub(crate) fn split_at(&mut self, attr_index: usize, attr_value: AttrValueType) -> Self {
+    pub fn split_at(&mut self, attr_index: usize, attr_value: AttrValueType) -> Self {
         let attr_type = self.report_handler.get_attr_types()[attr_index];
         assert!(
             attr_type.is_categorical(),
@@ -276,16 +276,14 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     }
 }
 
-#[cfg(test)]
-pub(crate) mod zipf {
+pub mod test_distr {
     use super::*;
     use crate::random::zipf::ZipfDistribution;
-    use rand_distr::Distribution;
-    use rand_distr::Normal;
+    use rand_distr::{Distribution, Normal};
 
     impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
         /// Adds many `Report`s to the `ReportVector` with attributes sampled from a Zipf distribution.
-        pub(crate) fn push_many_zipf<R: Rng + Default>(
+        pub fn push_many_zipf<R: Rng + Default>(
             &mut self,
             count: usize,
             s: f64,
@@ -307,7 +305,7 @@ pub(crate) mod zipf {
                         // divided by two, so that we don't overflow the modulus when multiplying by two.
                         (attr_type.get_modulus() - 1) / 2
                     };
-                    let zipf = zipf::ZipfDistribution::new(zipf_max, s, randomize_zipf).unwrap();
+                    let zipf = ZipfDistribution::new(zipf_max, s, randomize_zipf).unwrap();
                     zipf.sample_iter(R::default())
                         .map(|z| z as AttrValueType)
                         .take(count)
@@ -329,7 +327,7 @@ pub(crate) mod zipf {
 
         /// Adds many `Report`s to the `ReportVector` with attributes sampled from a Gaussian distribution
         /// centered at the middle of the range for each attribute.
-        pub(crate) fn push_many_gaussian<R: Rng + Default>(&mut self, count: usize, s: f64) {
+        pub fn push_many_gaussian<R: Rng + Default>(&mut self, count: usize, s: f64) {
             // Sample `count` many values for each attribute.
             let dummy_attr_values = self.report_handler.get_dummy_attr_values();
             let attr_types = self.report_handler.get_attr_types();

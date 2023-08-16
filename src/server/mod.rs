@@ -1,7 +1,12 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-pub mod histogram;
-pub(crate) mod ot;
-pub mod role;
-pub mod server;
+mod histogram;
+mod ot;
+mod role;
+mod server;
+
+pub use histogram::Histogram;
+pub use role::Role;
+pub use server::Server;
+pub use server::SummationModulus;

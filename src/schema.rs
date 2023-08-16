@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum AttributeType {
+pub enum AttributeType {
     C2,
     C3,
     C4,
@@ -668,7 +668,7 @@ pub struct Schema(pub(crate) Vec<(String, AttributeType)>);
 
 impl Schema {
     /// Return the number of attributes in this `Schema`.
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         if !self.is_valid() {
             panic!("Invalid schema");
         }
@@ -677,7 +677,7 @@ impl Schema {
     }
 
     /// Return a vector of attribute names.
-    pub(crate) fn get_attr_names(&self) -> Vec<String> {
+    pub fn get_attr_names(&self) -> Vec<String> {
         if !self.is_valid() {
             panic!("Invalid schema");
         }
@@ -691,7 +691,7 @@ impl Schema {
 
     /// If the schema has an attribute with the given name, returns the index of
     /// that attribute. Otherwise returns `None`.
-    pub(crate) fn get_attr_index(&self, attr_name: &str) -> Option<usize> {
+    pub fn get_attr_index(&self, attr_name: &str) -> Option<usize> {
         if !self.is_valid() {
             panic!("Invalid schema");
         }
@@ -705,7 +705,7 @@ impl Schema {
     }
 
     /// Returns a `Vec` of the `AttributeType`s.
-    pub(crate) fn get_attr_types(&self) -> Vec<AttributeType> {
+    pub fn get_attr_types(&self) -> Vec<AttributeType> {
         if !self.is_valid() {
             panic!("Invalid schema");
         }
@@ -718,7 +718,7 @@ impl Schema {
     }
 
     /// Returns a `HashMap` mapping the attribute names to their `AttributeType`s.
-    pub(crate) fn get_attr_name_to_type_map(&self) -> HashMap<String, AttributeType> {
+    pub fn get_attr_name_to_type_map(&self) -> HashMap<String, AttributeType> {
         if !self.is_valid() {
             panic!("Invalid schema");
         }
@@ -731,7 +731,7 @@ impl Schema {
     }
 
     /// Return a vector of attribute sizes.
-    pub(crate) fn get_attr_sizes(&self) -> Vec<usize> {
+    pub fn get_attr_sizes(&self) -> Vec<usize> {
         if !self.is_valid() {
             panic!("Invalid schema");
         }
@@ -743,7 +743,7 @@ impl Schema {
 
     /// Validate the `Schema`. The function returns `false` if the attribute names are not
     /// unique or if any of the attribute types are invalid. Otherwise returns `true`.
-    pub(crate) fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         let mut attr_names = HashSet::<String>::new();
         self.0
             .iter()
@@ -791,7 +791,7 @@ impl Schema {
     }
 
     /// Remove one of the `AttributeType`s from the `Schema`.
-    pub(crate) fn remove_attr(&mut self, attr_name: &str) -> &mut Self {
+    pub fn remove_attr(&mut self, attr_name: &str) -> &mut Self {
         if !self.is_valid() {
             panic!("Invalid schema");
         }
@@ -818,10 +818,7 @@ impl TryFrom<&str> for Schema {
 }
 
 /// Get the attribute type for a named attribute.
-pub(crate) fn attr_type_from_attr_name(
-    schema: &Schema,
-    attr_name: &str,
-) -> Result<AttributeType, String> {
+pub fn attr_type_from_attr_name(schema: &Schema, attr_name: &str) -> Result<AttributeType, String> {
     // Check that `attr_name` is a valid attribute name. Otherwise return an error.
     let attr_type = schema.get_attr_name_to_type_map().get(attr_name).copied();
     if attr_type.is_some() {
@@ -832,7 +829,7 @@ pub(crate) fn attr_type_from_attr_name(
 }
 
 /// Get the attribute index for a named attribute.
-pub(crate) fn attr_index_from_attr_name(schema: &Schema, attr_name: &str) -> Result<usize, String> {
+pub fn attr_index_from_attr_name(schema: &Schema, attr_name: &str) -> Result<usize, String> {
     // Check that `attr_name` is a valid attribute name. Otherwise return an error.
     schema
         .get_attr_index(attr_name)
