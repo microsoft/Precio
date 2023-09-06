@@ -2,3 +2,4 @@
 .vscode
 *.code-workspace
 *.json
+Cargo.lock
