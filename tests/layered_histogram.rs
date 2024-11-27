@@ -240,7 +240,7 @@ fn layered_histogram() {
         .unwrap();
     sub_histogram
         .borrow_mut()
-        .join_at(0, sub_sub_histogram)
+        .join_at(1, sub_sub_histogram)
         .unwrap();
 
     // Our `histogram` object represents now a layered histogram as follows:

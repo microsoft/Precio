@@ -86,7 +86,7 @@ As an example of the input, consider the following:
 This specifies a schema with four attributes, unimaginatively named `attr1`, `attr2`, `attr3`, and `attr4` here.
 In practice, the names should be descriptive of the meaning of the attribute.
 Here `attr1` and `attr3` are categorical, of sizes 2 and 4 bits, respectively, whereas `attr2` and `attr4` are numerical, of sizes 3 and 15 bits, respectively.
-The numerical attributes specify moduli 6 and 32767, which means that the value given to `attr2` must be in the range `[0, 3]` and the value given to `attr4` must be in the range `[0, 10000]`, as the largest valid input value is half of the modulus (rounded down).
+The numerical attributes specify moduli 7 and 20001, which means that the value given to `attr2` must be in the range `[0, 3]` and the value given to `attr4` must be in the range `[0, 10000]`, as the largest valid input value is half of the modulus (rounded down).
 
 In this example, the client specifies three reports with the following attribute values:
 | attr1 | attr2 | attr3 | attr4 |
