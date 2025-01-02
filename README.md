@@ -97,8 +97,8 @@ In this example, the client specifies three reports with the following attribute
 
 ### Histogram API
 The server's API is much more complex and makes up the vast majority of the library.
-First, they do not already exist, *e.g.*, from prior runs of the histogram protocol, new `server::Server` instances are created by calling `Server::<REPORT_U32_SIZE>::new(role: Role, schema: Schema)`.
-The servers simply specify their desired role (`Role::First`, `Role::Second`, or `Role::Third`) and the expected schema for the data that will be loaded in this server.
+First, instances of `server::Server` are created by calling `Server::<REPORT_U32_SIZE>::new(role: Role, schema: Schema)`, unless they already exist from prior runs of the histogram protocol.
+The servers specify their desired role (`Role::First`, `Role::Second`, or `Role::Third`) and the expected schema for the data that will be loaded in this server.
 
 All three servers need to decide on an attribute name from the schema for which they want to compute a histogram; we call this attribute the *current attribute*.
 Most of the server functions discussed below require the name of the current attribute to be given as a parameter.
