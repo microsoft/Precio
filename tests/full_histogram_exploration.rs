@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+use itertools::Itertools;
 use precio::client;
 use precio::hist_noise::{Gaussian, NoiseDistribution};
 use precio::server::{Histogram, Role, Server};
@@ -45,7 +46,7 @@ fn build_histogram<const REPORT_U32_SIZE: usize>(
         .get_all_counts()
         .keys()
         .copied()
-        .collect::<Vec<_>>();
+        .collect_vec();
 
     let mut sub_schema = schema.clone();
     sub_schema.remove_attr(&attr_name);
@@ -164,7 +165,7 @@ fn build_private_histogram<
             .get_all_counts()
             .keys()
             .copied()
-            .collect::<Vec<_>>();
+            .collect_vec();
         for attr_value in all_values {
             // println!(
             //     "server1 report count: {}",
@@ -285,7 +286,7 @@ fn full_histogram_exploration() {
     println!("Time to build plaintext histogram: {:?}", duration);
     println!(
         "Total nodes in full histogram: {}",
-        utils::total_nodes(histogram.clone())
+        histogram.borrow().total_node_count()
     );
 
     let report_vector_share = report_vector.share(&mut rng);
@@ -306,7 +307,7 @@ fn full_histogram_exploration() {
     println!("Time to build private histogram: {:?}", duration);
     println!(
         "Total nodes in private histogram: {}",
-        utils::total_nodes(private_histogram.clone())
+        private_histogram.borrow().total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 
@@ -349,7 +350,7 @@ fn full_histogram_exploration_from_file() {
     println!("Time to build plaintext histogram: {:?}", duration);
     println!(
         "Total nodes in full histogram: {}",
-        utils::total_nodes(histogram.clone())
+        histogram.borrow().total_node_count()
     );
 
     let start = Instant::now();
@@ -369,7 +370,7 @@ fn full_histogram_exploration_from_file() {
     println!("Time to build private histogram: {:?}", duration);
     println!(
         "Total nodes in private histogram: {}",
-        utils::total_nodes(private_histogram.clone())
+        private_histogram.borrow().total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 

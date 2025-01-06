@@ -74,7 +74,7 @@ pub enum AttributeType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum Attribute {
+pub enum Attribute {
     C2(u8),
     C3(u8),
     C4(u8),
@@ -809,11 +809,7 @@ impl TryFrom<&str> for Schema {
 
     fn try_from(input_json: &str) -> Result<Self, Self::Error> {
         // Load the input JSON.
-        let schema_json: Result<Schema, _> = serde_json::from_str(input_json);
-        match schema_json {
-            Ok(schema) => Ok(schema),
-            Err(e) => Err(format!("Error parsing input JSON: {}.", e)),
-        }
+        serde_json::from_str(input_json).map_err(|e| e.to_string())
     }
 }
 

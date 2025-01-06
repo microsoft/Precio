@@ -687,7 +687,7 @@ impl<const REPORT_U32_SIZE: usize> Server<REPORT_U32_SIZE> {
         let input_bits = reports
             .get_attr_iter(attr_index)
             .map(|attr_value| attr_modulus.add_mod(attr_value, attr_value) & 1 != 0)
-            .collect::<Vec<_>>();
+            .collect();
 
         ot_handler.create_masked_bit_messages::<R>(seed_msgs, &input_bits)
     }
@@ -745,7 +745,7 @@ impl<const REPORT_U32_SIZE: usize> Server<REPORT_U32_SIZE> {
         let input_bits = reports
             .get_attr_iter(attr_index)
             .map(|attr_value| attr_modulus.add_mod(attr_value, attr_value) & 1 != 0)
-            .collect::<Vec<_>>();
+            .collect();
 
         let (reveal_msgs, lsb_shares) =
             ot_handler.create_reveal_messages::<R>(rng, masked_bits, &input_bits)?;

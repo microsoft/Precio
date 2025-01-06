@@ -194,6 +194,7 @@ pub mod hist_noise {
 pub(crate) mod zipf {
     use super::*;
     use ::zipf::ZipfDistribution as RegularZipfDistribution;
+    use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand_distr::Distribution;
 
@@ -209,7 +210,7 @@ pub(crate) mod zipf {
         /// Create a new Zipf distribution with parameter s for the interval [0, max_value].
         pub fn new(max_value: u32, s: f64, randomize_range: bool) -> Result<Self, ()> {
             let zipf = RegularZipfDistribution::new(max_value as usize + 1, s)?;
-            let mut range_permutation = (0..max_value as usize + 1).collect::<Vec<_>>();
+            let mut range_permutation = (0..max_value as usize + 1).collect_vec();
 
             if randomize_range {
                 range_permutation.shuffle(&mut rand::thread_rng());
@@ -234,6 +235,7 @@ mod tests {
     use super::hist_noise::*;
     use super::prf::*;
     use super::*;
+    use itertools::Itertools;
     use rand::rngs::OsRng;
     use rand::RngCore;
     use rand_distr::Distribution;
@@ -315,8 +317,8 @@ mod tests {
         let s = 8.0;
         let gaussian = Gaussian::new(m, s).unwrap();
         let mut attempts = 0;
-        let samples1 = gaussian.sample_iter(&mut rng).take(10).collect::<Vec<_>>();
-        let samples2 = gaussian.sample_iter(&mut rng).take(10).collect::<Vec<_>>();
+        let samples1 = gaussian.sample_iter(&mut rng).take(10).collect_vec();
+        let samples2 = gaussian.sample_iter(&mut rng).take(10).collect_vec();
         samples1
             .iter()
             .zip(samples2.iter())
@@ -361,8 +363,8 @@ mod tests {
         let b = 8.0;
         let laplace = Laplace::new(m, b).unwrap();
         let mut attempts = 0;
-        let samples1 = laplace.sample_iter(&mut rng).take(10).collect::<Vec<_>>();
-        let samples2 = laplace.sample_iter(&mut rng).take(10).collect::<Vec<_>>();
+        let samples1 = laplace.sample_iter(&mut rng).take(10).collect_vec();
+        let samples2 = laplace.sample_iter(&mut rng).take(10).collect_vec();
         samples1
             .iter()
             .zip(samples2.iter())
@@ -382,7 +384,7 @@ mod tests {
     fn test_zipf_array_sampling() {
         let mut rng = OsRng;
         let zipf = zipf::ZipfDistribution::new(100, 1.0, false).unwrap();
-        let samples = zipf.sample_iter(&mut rng).take(10000).collect::<Vec<_>>();
+        let samples = zipf.sample_iter(&mut rng).take(10000).collect_vec();
         assert_eq!(samples.len(), 10000);
         assert_eq!(samples.iter().max(), Some(&100));
         assert_eq!(samples.iter().min(), Some(&0));

@@ -1,23 +1,10 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-use crate::report::report_handler::ReportHandler;
 use crate::report::report_vector::ReportVector;
-use crate::schema::{Attribute, Schema};
+use crate::schema::Schema;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 use std::result::Result;
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-struct RawReport {
-    attributes: Vec<Attribute>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-struct RawReportVector {
-    schema: Schema,
-    reports: Vec<RawReport>,
-}
 
 pub fn create_report_shares<const REPORT_U32_SIZE: usize>(
     rng: &mut (impl Rng + ?Sized),
@@ -31,70 +18,8 @@ pub fn create_report_shares<const REPORT_U32_SIZE: usize>(
     ),
     String,
 > {
-    // Load the input JSON into a RawReportVector.
-    let reports_json_res: Result<RawReportVector, _> = serde_json::from_str(&input_json);
-    let raw_reports: RawReportVector;
-    match reports_json_res {
-        Ok(r) => {
-            raw_reports = r;
-        }
-        Err(e) => return Err(format!("Error parsing input JSON: {}.", e.to_string())),
-    }
-
-    // Extract the schema and reports from the RawReportVector.
-    let schema = raw_reports.schema;
-    let reports = raw_reports.reports;
-
-    // Check that the schema is valid.
-    if !schema.is_valid() {
-        return Err(format!("Invalid schema: {:?}.", schema));
-    }
-
-    // From the schema, compute a vector of attribute sizes. Ensure these are valid
-    // and create a `ReportVector`.
-    let attr_types = schema.get_attr_types();
-    if !ReportHandler::<REPORT_U32_SIZE>::is_valid_attr_types(&attr_types) {
-        return Err(format!("Invalid attribute types: {:?}.", attr_types));
-    }
-    let mut report_vector = ReportVector::<REPORT_U32_SIZE>::new(&attr_types);
-    let report_handler = report_vector.report_handler().clone();
-
-    // Get a vector of dummy attribute values from the `ReportHandler`.
-    let dummy_attr_values = report_handler.get_dummy_attr_values();
-
-    for report in reports.iter() {
-        // Check that each report is compatible with the schema.
-        if !schema.is_compatible_attr_array(&report.attributes) {
-            return Err(format!(
-                "Report {:?} is invalid for the schema {:?}.",
-                report, schema
-            ));
-        }
-
-        // For categorical attributes, check that the clients' values are not dummy
-        // values. For numerical attributes this is not necessary.
-        if report
-            .attributes
-            .iter()
-            .zip(dummy_attr_values.iter().copied())
-            .filter(|(&attr, _)| attr.get_type().is_categorical())
-            .any(|(attr, dummy_value)| attr.get_value() == dummy_value)
-        {
-            return Err(format!(
-                "Report {:?} contains dummy values {:?} for categorical attributes.",
-                report, dummy_attr_values
-            ));
-        }
-
-        // Accumulate them to the `ReportVector`.
-        let attr_values = report
-            .attributes
-            .iter()
-            .map(|attr| attr.get_value())
-            .collect::<Vec<_>>();
-        let report = report_handler.create_report(&attr_values);
-        report_vector.push(report);
-    }
+    // Load the `ReportVector`. The client should never load dummy values in its data.
+    let (report_vector, schema) = ReportVector::from_json(input_json, false)?;
 
     // Share the `ReportVector` and return the shares.
     let mut report_vector_share1 = report_vector.clone();
@@ -110,6 +35,7 @@ pub fn create_report_shares<const REPORT_U32_SIZE: usize>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::report::plain_report::{PlainReport, PlainReportVector};
     use crate::schema::*;
     use rand::rngs::OsRng;
 
@@ -122,7 +48,7 @@ mod tests {
             ("attr4".to_string(), AttributeType::C15),
         ]);
         let reports = vec![
-            RawReport {
+            PlainReport {
                 attributes: vec![
                     Attribute::C2(0b10),
                     Attribute::C3(0b011),
@@ -130,7 +56,7 @@ mod tests {
                     Attribute::C15(0b110_1101_1011_0110),
                 ],
             },
-            RawReport {
+            PlainReport {
                 attributes: vec![
                     Attribute::C2(0b00),
                     Attribute::C3(0b010),
@@ -138,7 +64,7 @@ mod tests {
                     Attribute::C15(0b000_1111_0011_0101),
                 ],
             },
-            RawReport {
+            PlainReport {
                 attributes: vec![
                     Attribute::C2(0b1),
                     Attribute::C3(0b100),
@@ -147,9 +73,9 @@ mod tests {
                 ],
             },
         ];
-        let raw_report_vector = RawReportVector { schema, reports };
+        let raw_report_vector = PlainReportVector { schema, reports };
         let json = serde_json::to_string(&raw_report_vector).unwrap();
-        let raw_report_vector2: RawReportVector = serde_json::from_str(&json).unwrap();
+        let raw_report_vector2: PlainReportVector = serde_json::from_str(&json).unwrap();
         assert_eq!(raw_report_vector, raw_report_vector2);
 
         let json = r#"
@@ -161,7 +87,7 @@ mod tests {
                     {"attributes":[{"c2":1},{"c3":4},{"c4":5},{"c15":8962}]}
                 ]
             }"#;
-        let raw_report_vector: RawReportVector = serde_json::from_str(&json).unwrap();
+        let raw_report_vector: PlainReportVector = serde_json::from_str(&json).unwrap();
         assert_eq!(raw_report_vector, raw_report_vector2);
     }
 
@@ -174,7 +100,7 @@ mod tests {
             ("attr4".to_string(), AttributeType::N15(32767)),
         ]);
         let reports = vec![
-            RawReport {
+            PlainReport {
                 attributes: vec![
                     Attribute::C2(0b10),
                     Attribute::N3(5, 6),
@@ -182,7 +108,7 @@ mod tests {
                     Attribute::N15(32766, 32767),
                 ],
             },
-            RawReport {
+            PlainReport {
                 attributes: vec![
                     Attribute::C2(0b00),
                     Attribute::N3(0, 6),
@@ -190,7 +116,7 @@ mod tests {
                     Attribute::N15(0, 32767),
                 ],
             },
-            RawReport {
+            PlainReport {
                 attributes: vec![
                     Attribute::C2(0b1),
                     Attribute::N3(3, 6),
@@ -199,9 +125,9 @@ mod tests {
                 ],
             },
         ];
-        let raw_report_vector = RawReportVector { schema, reports };
+        let raw_report_vector = PlainReportVector { schema, reports };
         let json = serde_json::to_string(&raw_report_vector).unwrap();
-        let raw_report_vector2: RawReportVector = serde_json::from_str(&json).unwrap();
+        let raw_report_vector2: PlainReportVector = serde_json::from_str(&json).unwrap();
         assert_eq!(raw_report_vector, raw_report_vector2);
 
         let json = r#"
@@ -213,7 +139,7 @@ mod tests {
                     {"attributes":[{"c2":1},{"n3":[3,6]},{"c4":5},{"n15":[16384,32767]}]}
                 ]
             }"#;
-        let raw_report_vector: RawReportVector = serde_json::from_str(&json).unwrap();
+        let raw_report_vector: PlainReportVector = serde_json::from_str(&json).unwrap();
         assert_eq!(raw_report_vector, raw_report_vector2);
     }
 

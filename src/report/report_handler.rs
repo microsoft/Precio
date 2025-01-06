@@ -5,6 +5,7 @@ use crate::arith::Modulus;
 use crate::report::attr::{random_attr_value, AttrValueType, MAX_ATTR_BIT_SIZE};
 use crate::report::report::Report;
 use crate::schema::{AttributeType, Schema};
+use itertools::Itertools;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::mem::size_of;
@@ -95,7 +96,7 @@ impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
         let attr_sizes = attr_types
             .iter()
             .map(|attr_type| attr_type.get_size())
-            .collect::<Vec<_>>();
+            .collect_vec();
 
         // Panic if the attribute types are invalid.
         assert!(
@@ -115,7 +116,7 @@ impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
             .iter()
             .zip(&attr_offsets)
             .map(|(attr_size, start_pos)| Self::make_attr_filter(*attr_size, *start_pos))
-            .collect::<Vec<_>>();
+            .collect_vec();
 
         // The report_filter is the OR of all attribute filters.
         let report_filter = Self::make_report_filter(&attr_filters);
@@ -160,7 +161,7 @@ impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
                     !0u32 >> (MAX_ATTR_BIT_SIZE - attr_type.get_size())
                 }
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
 
     /// Return whether an attribute index is valid.
@@ -350,6 +351,17 @@ impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
         let attr_value = (attr_report >> attr_offset).as_u32_slice()[0];
 
         attr_value
+    }
+
+    /// Get an iterator to all attributes for a given `Report`.
+    pub(crate) fn get_attrs_iter<'a>(
+        &'a self,
+        report: &'a Report<U32_SIZE>,
+    ) -> impl Iterator<Item = AttrValueType> + 'a {
+        self.attr_types
+            .iter()
+            .enumerate()
+            .map(|(attr_index, _)| self.get_attr(report, attr_index))
     }
 
     /// Set an attribute value to zero in a given `Report`.
@@ -547,7 +559,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ReportHandler::new: Invalid attribute sizes.")]
     fn test_new_panic3() {
-        let attr_types = (0..7).map(|_| AttributeType::C10).collect::<Vec<_>>();
+        let attr_types = (0..7).map(|_| AttributeType::C10).collect_vec();
         let _report_handler = ReportHandler::<2>::new(&attr_types);
     }
 

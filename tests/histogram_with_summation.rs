@@ -10,6 +10,9 @@ use rand::rngs::{OsRng, StdRng};
 use rand::Rng;
 use std::time::Instant;
 
+mod utils;
+use utils::sum_protocol;
+
 #[test]
 fn histogram_with_summation() {
     // In this example we have a numerical attribute in addition to two
@@ -70,72 +73,6 @@ fn histogram_with_summation() {
     let mut server2 = Server::<U32_SIZE>::new(Role::Second, schema.clone());
     server2.add_reports(report_vector_share).unwrap();
     let mut server3 = Server::<U32_SIZE>::new(Role::Third, schema.clone());
-
-    // This lambda-function performs the sum protocol. The function returns the
-    // outputs for Server1 and Server2, as well as the total communication in bytes.
-    // The two servers' outputs are secret-shares of the sum.
-    let sum_protocol = |server1: &mut Server<U32_SIZE>,
-                        server2: &mut Server<U32_SIZE>,
-                        server3: &mut Server<U32_SIZE>,
-                        attr_name: &str,
-                        summation_modulus: SummationModulus|
-     -> (SummationModulus, SummationModulus, usize) {
-        // We keep track of the communication in this variable.
-        let mut communication = 0usize;
-        let mut rng = OsRng;
-
-        // This is the number of reports. We need it later.
-        let report_count = server1.get_report_count().unwrap();
-
-        // Each server must independently call `summation_initialize`.
-        server1
-            .summation_initialize(&mut rng, attr_name, summation_modulus)
-            .unwrap();
-        server2
-            .summation_initialize(&mut rng, attr_name, summation_modulus)
-            .unwrap();
-        server3
-            .summation_initialize(&mut rng, attr_name, summation_modulus)
-            .unwrap();
-
-        // The servers need to call the following sequence of functions and communicate
-        // the outputs of the functions to each other, as indicated by the function names
-        // below. All objects are serializable, as is demonstrated here. We serialize here
-        // only to measure the communication cost of the protocol.
-        let from_s3_to_s2 = server3.summation_create_key().unwrap();
-        communication += bincode::serialize(&from_s3_to_s2).unwrap().len();
-
-        let from_s3_to_s1 = server3
-            .summation_create_seeds(&mut rng, report_count)
-            .unwrap();
-        communication += bincode::serialize(&from_s3_to_s1).unwrap().len();
-
-        server2.summation_receive_key(from_s3_to_s2).unwrap();
-
-        let from_s1_to_s2 = server1
-            .summation_create_masked_bits::<StdRng>(from_s3_to_s1)
-            .unwrap();
-        communication += bincode::serialize(&from_s1_to_s2).unwrap().len();
-
-        let (from_s2_to_s1, s2_output) = server2
-            .summation_create_reveal_msgs::<StdRng>(&mut rng, from_s1_to_s2)
-            .unwrap();
-        communication += bincode::serialize(&from_s2_to_s1).unwrap().len();
-
-        let s1_output = server1
-            .summation_receive_reveal_msgs(from_s2_to_s1)
-            .unwrap();
-
-        server1.summation_finalize();
-        server2.summation_finalize();
-        server3.summation_finalize();
-
-        // At this point, `s1_output` and `s2_output` hold the result for Server1
-        // and Server2, respectively. In practice, we need to add some noise to these
-        // to make them differentially private. This is simple, so we omit it here, and
-        // instead just return the two shares and the total communication.
-        (s1_output, s2_output, communication)
-    };
 
     // This lambda-function executes the histogram protocol, finds the most commonly
     // occuring value for the given attribute, and removes all other reports from
@@ -220,7 +157,7 @@ fn histogram_with_summation() {
 
     // Round 1: Sum the numerical attribute values for attr2.
     let start = Instant::now();
-    let (s1_output, s2_output, communication) = sum_protocol(
+    let (s1_output, s2_output, communication) = utils::sum_protocol(
         &mut server1,
         &mut server2,
         &mut server3,

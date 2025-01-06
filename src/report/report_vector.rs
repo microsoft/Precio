@@ -4,7 +4,9 @@
 use super::attr::AttrValueType;
 use super::report::Report;
 use super::report_handler::ReportHandler;
-use crate::schema::AttributeType;
+use crate::report::plain_report::{PlainReport, PlainReportVector};
+use crate::schema::{attr_from_attr_value, Attribute, AttributeType, Schema};
+use itertools::Itertools;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -49,6 +51,83 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
             report_handler: ReportHandler::new(attr_types),
             reports: Vec::new(),
         }
+    }
+
+    // Create a new `ReportVector` from a `PlainReportVector`.
+    pub(crate) fn from_plain_report_vector(
+        plain_reports: &PlainReportVector,
+        allow_dummy_values: bool,
+    ) -> Result<Self, String> {
+        // Extract the schema and reports from the PlainReportVector.
+        let schema = &plain_reports.schema;
+        let reports = &plain_reports.reports;
+
+        // Check that the schema is valid.
+        if !schema.is_valid() {
+            return Err(format!("Invalid schema: {:?}.", schema));
+        }
+
+        // From the schema, compute a vector of attribute sizes. Ensure these are valid
+        // and create a `ReportVector`.
+        let attr_types = schema.get_attr_types();
+        if !ReportHandler::<U32_SIZE>::is_valid_attr_types(&attr_types) {
+            return Err(format!("Invalid attribute types: {:?}.", attr_types));
+        }
+        let mut report_vector = ReportVector::<U32_SIZE>::new(&attr_types);
+        let report_handler = report_vector.report_handler().clone();
+
+        // Get a vector of dummy attribute values from the `ReportHandler`.
+        let dummy_attr_values = report_handler.get_dummy_attr_values();
+
+        for report in reports.iter() {
+            // Check that each report is compatible with the schema.
+            if !schema.is_compatible_attr_array(&report.attributes) {
+                return Err(format!(
+                    "Report {:?} is invalid for the schema {:?}.",
+                    report, schema
+                ));
+            }
+
+            // For categorical attributes, check that the clients' values are not dummy
+            // values. For numerical attributes this is not necessary.
+            if !allow_dummy_values
+                && report
+                    .attributes
+                    .iter()
+                    .zip(dummy_attr_values.iter().copied())
+                    .filter(|(&attr, _)| attr.get_type().is_categorical())
+                    .any(|(attr, dummy_value)| attr.get_value() == dummy_value)
+            {
+                return Err(format!(
+                    "Report {:?} contains dummy values {:?} for categorical attributes.",
+                    report, dummy_attr_values
+                ));
+            }
+
+            // Accumulate them to the `ReportVector`.
+            let attr_values = report
+                .attributes
+                .iter()
+                .map(|attr| attr.get_value())
+                .collect_vec();
+            let report = report_handler.create_report(&attr_values);
+            report_vector.push(report);
+        }
+
+        Ok(report_vector)
+    }
+
+    /// Load a `ReportVector` from a JSON string. This method is for internal use and
+    /// demonstration purposes only, when the attribute values need to be easily human-readable.
+    /// In practice, it is far better to simply deserialize the `ReportVector` directly using
+    /// `bincode` or `serde_json`.
+    pub fn from_json(input_json: &str, allow_dummy_values: bool) -> Result<(Self, Schema), String> {
+        let plain_report_vector: PlainReportVector =
+            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+        let schema = plain_report_vector.schema.clone();
+        let report_vector =
+            Self::from_plain_report_vector(&plain_report_vector, allow_dummy_values)?;
+        Ok((report_vector, schema))
     }
 
     /// Create the `ReportVector` data from a random seed.
@@ -274,6 +353,57 @@ impl<const U32_SIZE: usize> ReportVector<U32_SIZE> {
     pub(crate) fn permute<R: Rng + ?Sized>(&mut self, rng: &mut R) {
         self.reports.as_mut_slice().shuffle(rng);
     }
+
+    /// Extract the data from the `ReportVector` into a `PlainReportVector` object
+    /// according to the provided schema.
+    pub(crate) fn extract_reports(&self, schema: &Schema) -> Result<PlainReportVector, String> {
+        if !self.report_handler.is_compatible_schema(schema) {
+            return Err("The schema is not compatible with the ReportVector.".to_string());
+        }
+
+        let attr_types = schema.get_attr_types();
+        // Create an empty vector.
+        let mut plain_reports = Vec::<PlainReport>::new();
+        for report in self.reports.iter() {
+            // Iterator to the attribute values of the report.
+            let attrs_iter = self.report_handler.get_attrs_iter(report);
+
+            // Create the `PlainReport` for this report.
+            let mut plain_report = Vec::<Attribute>::new();
+            for (attr_value, attr_type) in attrs_iter.zip(attr_types.iter()) {
+                let attr = attr_from_attr_value(*attr_type, attr_value)?;
+                plain_report.push(attr);
+            }
+
+            // Add our new `PlainReport` to the vector.
+            plain_reports.push(PlainReport {
+                attributes: plain_report,
+            });
+        }
+
+        Ok(PlainReportVector {
+            schema: schema.clone(),
+            reports: plain_reports,
+        })
+    }
+
+    /// Extract the data from the `ReportVector` into a JSON string. This method is for
+    /// demonstration purposes only, when the attribute values need to be easily human-readable.
+    /// In practice, it is far better to simply serialize the `ReportVector` directly using
+    /// `bincode` or `serde_json`.
+    pub fn to_json(&self, schema: &Schema) -> Result<String, String> {
+        let plain_report_vector = self.extract_reports(schema)?;
+        serde_json::to_string(&plain_report_vector).map_err(|e| e.to_string())
+    }
+
+    /// Extract the data from the `ReportVector` into a pretty JSON string. This method is for
+    /// demonstration purposes only, when the attribute values need to be easily human-readable.
+    /// In practice, it is far better to simply serialize the `ReportVector` directly using
+    /// `bincode` or `serde_json`.
+    pub fn to_json_pretty(&self, schema: &Schema) -> Result<String, String> {
+        let plain_report_vector = self.extract_reports(schema)?;
+        serde_json::to_string_pretty(&plain_report_vector).map_err(|e| e.to_string())
+    }
 }
 
 pub mod test_distr {
@@ -311,7 +441,7 @@ pub mod test_distr {
                         .take(count)
                         .collect::<Vec<AttrValueType>>()
                 })
-                .collect::<Vec<_>>();
+                .collect_vec();
 
             // Now just create `Report`s from the samples, removing them from zipf_samples at the same time.
             (0..count).for_each(|_| {
@@ -352,7 +482,7 @@ pub mod test_distr {
                         .take(count)
                         .collect::<Vec<AttrValueType>>()
                 })
-                .collect::<Vec<_>>();
+                .collect_vec();
 
             // Now just create `Report`s from the samples, removing them from gaussian_samples at the same time.
             (0..count).for_each(|_| {

@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+use itertools::Itertools;
 use precio::client;
 use precio::hist_noise::{Gaussian, NoiseDistribution};
 use precio::server::{Histogram, Role, Server};
@@ -141,10 +142,7 @@ fn private_heavy_hitter_internal<
         // We want to go over the keys in the way of largest value (count) first.
         let mut all_values_and_counts = Vec::from_iter(histogram.borrow().get_all_counts());
         all_values_and_counts.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-        let all_values = all_values_and_counts
-            .iter()
-            .map(|&kv| kv.0)
-            .collect::<Vec<_>>();
+        let all_values = all_values_and_counts.iter().map(|&kv| kv.0).collect_vec();
         for attr_value in all_values {
             // Exit the loop if the count in this branch is less than the current hh_count.
             if histogram.borrow().get_count(attr_value) <= hh_count {
@@ -293,7 +291,7 @@ fn heavy_hitter() {
     println!("Heavy hitter count: {}", hh_count);
     println!(
         "Total nodes explored in private histogram: {}",
-        utils::total_nodes(private_histogram.unwrap().clone())
+        private_histogram.unwrap().borrow().total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 }
@@ -347,7 +345,7 @@ fn heavy_hitter_from_file() {
     println!("Heavy hitter count: {}", hh_count);
     println!(
         "Total nodes explored in private histogram: {}",
-        utils::total_nodes(private_histogram.unwrap().clone())
+        private_histogram.unwrap().borrow().total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 }

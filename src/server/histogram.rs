@@ -216,6 +216,29 @@ impl Histogram {
 
         Ok(self.filter(join_at).unwrap())
     }
+
+    /// This is a helper function for `total_node_count`. It computes the
+    /// total number of nodes in a layered histogram tree.
+    fn total_node_count_internal(&self) -> usize {
+        let mut total = 0;
+        for (value, _) in self.get_all_counts() {
+            let sub_histogram = self.filter(value);
+            if sub_histogram.is_some() {
+                total += 1 + sub_histogram.unwrap().borrow().total_node_count_internal();
+            }
+        }
+        total
+    }
+
+    /// This function returns the total number of nodes in the histogram tree.
+    pub fn total_node_count(&self) -> usize {
+        let empty = self.get_total_count() == 0;
+        if empty {
+            0
+        } else {
+            1 + self.total_node_count_internal()
+        }
+    }
 }
 
 #[cfg(test)]
