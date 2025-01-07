@@ -176,9 +176,9 @@ fn main() {
 
     // Joining the histograms is done with the `join_at` function. Here the join_at
     // value means that `sub_histogram` is for "Country" being the most frequent one.
-    // This way we can patch together (sub-)histograms into a tree-like structure. The `join_at` function
-    // returns (wrapped inn Rc<RefCell<_>>) a reference to the newly joined sub-histogram.
-    // This way we can in the next round join to this `sub_histogram`.
+    // This way we can patch together (sub-)histograms into a tree-like structure.
+    // The `join_at` function returns (wrapped in Rc<RefCell<_>>) a reference to
+    // the newly joined sub-histogram.
     let sub_histogram = histogram
         .borrow_mut()
         .join_at(most_frequent_country, sub_histogram)
@@ -192,7 +192,10 @@ fn main() {
     // Find the second most frequent browser for the most frequent country.
     let (num_reports_second_most_freq_browser, second_most_frequent_browser) =
         most_frequent_browsers[1];
-    println!("Second most frequent browser index: {second_most_frequent_browser} (number of reports: {num_reports_second_most_freq_browser})");
+    println!(
+        "Second most frequent browser index: {} (number of reports: {})",
+        second_most_frequent_browser, num_reports_second_most_freq_browser
+    );
 
     // Report the communication cost.
     println!(
@@ -200,7 +203,8 @@ fn main() {
         communication >> 20
     );
 
-    // Next, suppose the analyst wants to compute the average spend for people from the most frequent country using the two most frequent browsers.
+    // Next, suppose the analyst wants to compute the average spend for people from the most
+    // frequent country using the two most frequent browsers.
     let mut server1_for_sum = server1.split_at(attr_name, most_frequent_browser).unwrap();
     let mut server2_for_sum = server2.split_at(attr_name, most_frequent_browser).unwrap();
     server3.remove_attr(attr_name).unwrap();
