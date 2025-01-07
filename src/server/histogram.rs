@@ -219,25 +219,47 @@ impl Histogram {
 
     /// This is a helper function for `total_node_count`. It computes the
     /// total number of nodes in a layered histogram tree.
-    fn total_node_count_internal(&self) -> usize {
+    fn get_total_node_count_internal(&self) -> usize {
         let mut total = 0;
         for (value, _) in self.get_all_counts() {
             let sub_histogram = self.filter(value);
             if sub_histogram.is_some() {
-                total += 1 + sub_histogram.unwrap().borrow().total_node_count_internal();
+                total += 1 + sub_histogram
+                    .unwrap()
+                    .borrow()
+                    .get_total_node_count_internal();
             }
         }
         total
     }
 
     /// This function returns the total number of nodes in the histogram tree.
-    pub fn total_node_count(&self) -> usize {
+    pub fn get_total_node_count(&self) -> usize {
         let empty = self.get_total_count() == 0;
         if empty {
             0
         } else {
-            1 + self.total_node_count_internal()
+            1 + self.get_total_node_count_internal()
         }
+    }
+
+    /// Extract an inverted frequency table. This is a vector, where each entry holds
+    /// a pair (frequency, attribute value), sorted by frequency in descending order.
+    /// The vector is truncated to the first `max_entries` entries.
+    /// If `max_entries` is 0, the vector is not truncated.
+    pub fn get_inverted_frequency_table(&self, max_entries: usize) -> Vec<(usize, AttrValueType)> {
+        let mut table = self
+            .values
+            .iter()
+            .map(|(attr, (count, _))| (*count, attr.get_value()))
+            .collect::<Vec<(usize, AttrValueType)>>();
+        table.sort_by(|a, b| b.0.cmp(&a.0));
+
+        if max_entries > 0 && table.len() > max_entries {
+            table.truncate(max_entries);
+        }
+
+        table
     }
 }
 

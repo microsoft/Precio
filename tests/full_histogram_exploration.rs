@@ -286,7 +286,7 @@ fn full_histogram_exploration() {
     println!("Time to build plaintext histogram: {:?}", duration);
     println!(
         "Total nodes in full histogram: {}",
-        histogram.borrow().total_node_count()
+        histogram.borrow().get_total_node_count()
     );
 
     let report_vector_share = report_vector.share(&mut rng);
@@ -307,7 +307,7 @@ fn full_histogram_exploration() {
     println!("Time to build private histogram: {:?}", duration);
     println!(
         "Total nodes in private histogram: {}",
-        private_histogram.borrow().total_node_count()
+        private_histogram.borrow().get_total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 
@@ -350,7 +350,7 @@ fn full_histogram_exploration_from_file() {
     println!("Time to build plaintext histogram: {:?}", duration);
     println!(
         "Total nodes in full histogram: {}",
-        histogram.borrow().total_node_count()
+        histogram.borrow().get_total_node_count()
     );
 
     let start = Instant::now();
@@ -370,7 +370,7 @@ fn full_histogram_exploration_from_file() {
     println!("Time to build private histogram: {:?}", duration);
     println!(
         "Total nodes in private histogram: {}",
-        private_histogram.borrow().total_node_count()
+        private_histogram.borrow().get_total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 

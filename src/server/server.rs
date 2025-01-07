@@ -69,6 +69,11 @@ impl<const REPORT_U32_SIZE: usize> Server<REPORT_U32_SIZE> {
         self.role
     }
 
+    /// Returnm the current schema.
+    pub fn get_schema(&self) -> Schema {
+        self.schema.clone()
+    }
+
     /// Add reports to the current set of reports the `Server` holds.
     pub fn add_reports(&mut self, reports: ReportVector<REPORT_U32_SIZE>) -> Result<(), String> {
         // Check that the `ReportVector` is compatible with the `Schema`.

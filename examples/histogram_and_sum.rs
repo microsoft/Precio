@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#![allow(unused_mut)]
+
 use precio::arith::{Modulus, Zero};
 use precio::hist_noise::{Gaussian, NoiseDistribution};
 use precio::server::{Role, Server, SummationModulus};
@@ -9,17 +11,33 @@ use rand::rngs::{OsRng, StdRng};
 use rand::Rng;
 
 fn main() {
+    // The `create_data` example creates a file `plain_data.json` with contents (for example):
+    //
+    // {
+    //     "schema": [["Country", "c8"], ["Browser", "c3"], ["Spend", {"n11": 2001}]],
+    //     "reports": [
+    //       { "attributes": [{ "c8": 110 }, { "c3": 6 }, { "n11": [480, 2001] }] },
+    //       { "attributes": [{ "c8": 15  }, { "c3": 0 }, { "n11": [880, 2001] }] },
+    //       ...
+    //     ]
+    // }
+    //
+    // It also creates two secret shares of this data in `plain_data_share1.json` and `plain_data_share2.json`.
+    // This example assumes that `create_data` has been ran so that the data files exist.
+
+    // Each report in this example is 22 bits, so can be encoded into a single `u32`.
     const U32_SIZE: usize = 1;
 
-    // This test reads plain_data_share1.json and plain_data_share2.json into two different Server
-    // instances, with roles `Role::First` and `Role::Second`, respectively.
+    // Read in `plain_data_share1.json` and `plain_data_share2.json`.
     let plain_data_share1_str = std::fs::read_to_string("plain_data_share1.json").unwrap();
     let (report_vector_share1, schema) =
         ReportVector::<U32_SIZE>::from_json(&plain_data_share1_str, true).unwrap();
+
     let plain_data_share2_str = std::fs::read_to_string("plain_data_share2.json").unwrap();
     let (report_vector_share2, _) =
         ReportVector::<U32_SIZE>::from_json(&plain_data_share2_str, true).unwrap();
 
+    // Create three server instances, with roles `Role::First`, `Role::Second`, and `Role::Third`, respectively.
     let mut server1 = Server::<U32_SIZE>::new(Role::First, schema.clone());
     server1.add_reports(report_vector_share1).unwrap();
 
@@ -30,7 +48,7 @@ fn main() {
 
     let mut rng = OsRng;
 
-    // DP parameters.
+    // DP parameters resulting in (2, 2^{-40})-DP.
     let m_buckets: i64 = -50;
     let m_flush: i64 = -250;
     let sigma_buckets = 6.8;
@@ -39,7 +57,8 @@ fn main() {
     let noise_distr_flush = Gaussian::new(m_flush, sigma_flush).unwrap();
 
     // This is the threshold for pruning. We do not care about values that show up fewer than
-    // this many times (including added noise reports).
+    // this many times (including added noise reports). The probability that a valid path
+    // with more than 1000 *true* items is pruned is <= 0.01.
     let threshold: usize = 1053;
 
     // We will first create a histogram for "Country".
@@ -60,37 +79,10 @@ fn main() {
         .unwrap();
     server1.add_empty_reports(server2_noise_reports).unwrap();
 
-    // The three servers need to perform an oblivious shuffle. First, each pair of servers
-    // agrees on a random seed. For example, here Server1 and Server2 agree on seed12.
-    let seed12 = rng.gen::<[u8; 32]>();
-    let seed23 = rng.gen::<[u8; 32]>();
-    let seed13 = rng.gen::<[u8; 32]>();
-
-    // Each server needs to call the `oblivious_permute` function. They communicate the
-    // output to the next server in order S2->S1->S3. The last server receives no output.
-    let to_server1 = server2
-        .oblivious_permute::<StdRng>(seed23.clone(), seed12.clone(), None)
-        .unwrap();
-    communication += bincode::serialize(&to_server1).unwrap().len();
-
-    let to_server3 = server1
-        .oblivious_permute::<StdRng>(seed12.clone(), seed13.clone(), to_server1)
-        .unwrap();
-    communication += bincode::serialize(&to_server3).unwrap().len();
-
-    server3
-        .oblivious_permute::<StdRng>(seed13.clone(), seed23.clone(), to_server3)
-        .unwrap();
-
-    // Server2 and Server3 rotate their roles for the next round of the protocol.
-    // Server1's role remains the same.
-    server2.rotate_role().unwrap();
-    server3.rotate_role().unwrap();
-
-    // We rename the servers for simplicity here.
-    let temp = server3;
-    let mut server3 = server2;
-    let mut server2 = temp;
+    // Obliviously permute the reports.
+    let (mut server1, mut server2, mut server3, permute_communication) =
+        oblivious_permute::<U32_SIZE>(server1, server2, server3);
+    communication += permute_communication;
 
     // Next, Server1 and Server2 reveal secret shares for the attribute for which
     // they want to compute the histogram.
@@ -119,14 +111,8 @@ fn main() {
         .unwrap();
 
     // Which country is the most frequent in the data?
-    let most_frequent_country = histogram
-        .borrow()
-        .get_all_counts()
-        .iter()
-        .max_by_key(|(_, &v)| v)
-        .map(|(k, _)| *k)
-        .unwrap();
-    let num_reports = histogram.borrow().get_count(most_frequent_country);
+    let (num_reports, most_frequent_country) =
+        histogram.borrow().get_inverted_frequency_table(1)[0];
     println!(
         "Most frequent country index: {most_frequent_country} (number of reports {num_reports})"
     );
@@ -161,33 +147,10 @@ fn main() {
         .unwrap();
     server1.add_empty_reports(server2_noise_reports).unwrap();
 
-    // Choose seeds and perform the oblivious shuffle.
-    let seed12 = rng.gen::<[u8; 32]>();
-    let seed23 = rng.gen::<[u8; 32]>();
-    let seed13 = rng.gen::<[u8; 32]>();
-
-    let to_server1 = server2
-        .oblivious_permute::<StdRng>(seed23.clone(), seed12.clone(), None)
-        .unwrap();
-    communication += bincode::serialize(&to_server1).unwrap().len();
-
-    let to_server3 = server1
-        .oblivious_permute::<StdRng>(seed12.clone(), seed13.clone(), to_server1)
-        .unwrap();
-    communication += bincode::serialize(&to_server3).unwrap().len();
-
-    server3
-        .oblivious_permute::<StdRng>(seed13.clone(), seed23.clone(), to_server3)
-        .unwrap();
-
-    // Rotate the roles.
-    server2.rotate_role().unwrap();
-    server3.rotate_role().unwrap();
-
-    // Rename the servers for simplicity.
-    let temp = server3;
-    let mut server3 = server2;
-    let mut server2 = temp;
+    // Obliviously permute the reports.
+    let (mut server1, mut server2, mut server3, permute_communication) =
+        oblivious_permute::<U32_SIZE>(server1, server2, server3);
+    communication += permute_communication;
 
     // Exchange and reveal the secret shares for attr2.
     let server1_attr_shares = server1.get_attr_values(attr_name).unwrap();
@@ -222,28 +185,13 @@ fn main() {
         .unwrap();
 
     // Find the most frequent browser for the most frequent country.
-    let most_frequent_browser = sub_histogram
-        .borrow()
-        .get_all_counts()
-        .iter()
-        .max_by_key(|(_, &v)| v)
-        .map(|(k, _)| *k)
-        .unwrap();
-    let num_reports_most_freq_browser = sub_histogram.borrow().get_count(most_frequent_browser);
+    let most_frequent_browsers = sub_histogram.borrow().get_inverted_frequency_table(2);
+    let (num_reports_most_freq_browser, most_frequent_browser) = most_frequent_browsers[0];
     println!("Most frequent browser index: {most_frequent_browser} (number of reports: {num_reports_most_freq_browser})");
 
     // Find the second most frequent browser for the most frequent country.
-    let second_most_frequent_browser = sub_histogram
-        .borrow()
-        .get_all_counts()
-        .iter()
-        .filter(|(k, _)| **k != most_frequent_browser)
-        .max_by_key(|(_, &v)| v)
-        .map(|(k, _)| *k)
-        .unwrap();
-    let num_reports_second_most_freq_browser = sub_histogram
-        .borrow()
-        .get_count(second_most_frequent_browser);
+    let (num_reports_second_most_freq_browser, second_most_frequent_browser) =
+        most_frequent_browsers[1];
     println!("Second most frequent browser index: {second_most_frequent_browser} (number of reports: {num_reports_second_most_freq_browser})");
 
     // Report the communication cost.
@@ -303,9 +251,59 @@ fn main() {
     );
 }
 
-// This function performs the sum protocol. The function returns the
-// outputs for Server1 and Server2, as well as the total communication in bytes.
-// The two servers' outputs are secret-shares of the sum.
+/// This function performs the oblivious shuffle protocol. The function returns the
+/// total communication in bytes. The function takes three servers as input, with roles
+/// in order `Role::First`, `Role::Second`, `Role::Third`. The function permutes the reports
+/// shared by `server1` and `server2`, resulting in `server1` and `server3` having the
+/// permuted set of reports. It then swaps the roles of `server2` and `server3`.
+fn oblivious_permute<const U32_SIZE: usize>(
+    mut server1: Server<U32_SIZE>,
+    mut server2: Server<U32_SIZE>,
+    mut server3: Server<U32_SIZE>,
+) -> (Server<U32_SIZE>, Server<U32_SIZE>, Server<U32_SIZE>, usize) {
+    let mut communication: usize = 0;
+
+    // Ensure server1 has `Role::First`, server2 has `Role::Second`, and server3 has `Role::Third`.
+    assert_eq!(server1.get_role(), Role::First);
+    assert_eq!(server2.get_role(), Role::Second);
+    assert_eq!(server3.get_role(), Role::Third);
+
+    let mut rng = OsRng;
+
+    // The three servers need to perform an oblivious shuffle. First, each pair of servers
+    // agrees on a random seed. For example, here Server1 and Server2 agree on seed12.
+    let seed12 = rng.gen::<[u8; 32]>();
+    let seed23 = rng.gen::<[u8; 32]>();
+    let seed13 = rng.gen::<[u8; 32]>();
+
+    // Each server needs to call the `oblivious_permute` function. They communicate the
+    // output to the next server in order S2->S1->S3. The last server receives no output.
+    let to_server1 = server2
+        .oblivious_permute::<StdRng>(seed23.clone(), seed12.clone(), None)
+        .unwrap();
+    communication += bincode::serialize(&to_server1).unwrap().len();
+
+    let to_server3 = server1
+        .oblivious_permute::<StdRng>(seed12.clone(), seed13.clone(), to_server1)
+        .unwrap();
+    communication += bincode::serialize(&to_server3).unwrap().len();
+
+    server3
+        .oblivious_permute::<StdRng>(seed13.clone(), seed23.clone(), to_server3)
+        .unwrap();
+
+    // Server2 and Server3 rotate their roles for the next round of the protocol.
+    // Server1's role remains the same.
+    server2.rotate_role().unwrap();
+    server3.rotate_role().unwrap();
+
+    // Swap `server2` and `server3`.
+    (server1, server3, server2, communication)
+}
+
+/// This function performs the sum protocol. The function returns the
+/// outputs for Server1 and Server2, as well as the total communication in bytes.
+/// The two servers' outputs are secret-shares of the sum.
 fn sum_protocol<const U32_SIZE: usize>(
     server1: &mut Server<U32_SIZE>,
     server2: &mut Server<U32_SIZE>,

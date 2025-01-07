@@ -291,7 +291,7 @@ fn heavy_hitter() {
     println!("Heavy hitter count: {}", hh_count);
     println!(
         "Total nodes explored in private histogram: {}",
-        private_histogram.unwrap().borrow().total_node_count()
+        private_histogram.unwrap().borrow().get_total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 }
@@ -345,7 +345,7 @@ fn heavy_hitter_from_file() {
     println!("Heavy hitter count: {}", hh_count);
     println!(
         "Total nodes explored in private histogram: {}",
-        private_histogram.unwrap().borrow().total_node_count()
+        private_histogram.unwrap().borrow().get_total_node_count()
     );
     println!("Communication for private histogram: {}", communication);
 }
