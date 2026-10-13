@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::mem::size_of;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "UncheckedReportHandler<U32_SIZE>")]
 pub struct ReportHandler<const U32_SIZE: usize> {
     attr_types: Vec<AttributeType>,
     attr_sizes: Vec<usize>,
@@ -18,6 +19,38 @@ pub struct ReportHandler<const U32_SIZE: usize> {
     attr_filters: Vec<Report<U32_SIZE>>,
     report_filter: Report<U32_SIZE>,
     report_filter_cat_only: Report<U32_SIZE>,
+}
+
+/// A `ReportHandler` as deserialized, before it has been validated.
+#[derive(Deserialize)]
+struct UncheckedReportHandler<const U32_SIZE: usize> {
+    attr_types: Vec<AttributeType>,
+    attr_sizes: Vec<usize>,
+    attr_offsets: Vec<usize>,
+    attr_filters: Vec<Report<U32_SIZE>>,
+    report_filter: Report<U32_SIZE>,
+    report_filter_cat_only: Report<U32_SIZE>,
+}
+
+impl<const U32_SIZE: usize> TryFrom<UncheckedReportHandler<U32_SIZE>> for ReportHandler<U32_SIZE> {
+    type Error = String;
+
+    fn try_from(unchecked: UncheckedReportHandler<U32_SIZE>) -> Result<Self, Self::Error> {
+        let report_handler = ReportHandler::<U32_SIZE> {
+            attr_types: unchecked.attr_types,
+            attr_sizes: unchecked.attr_sizes,
+            attr_offsets: unchecked.attr_offsets,
+            attr_filters: unchecked.attr_filters,
+            report_filter: unchecked.report_filter,
+            report_filter_cat_only: unchecked.report_filter_cat_only,
+        };
+
+        if !report_handler.is_valid() {
+            return Err("Invalid ReportHandler.".to_string());
+        }
+
+        Ok(report_handler)
+    }
 }
 
 impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
@@ -90,6 +123,51 @@ impl<const U32_SIZE: usize> ReportHandler<U32_SIZE> {
     /// Return whether a given vector of `AttributeType`s is valid.
     pub(crate) fn is_valid_attr_types(attr_types: &[AttributeType]) -> bool {
         attr_types.iter().all(|&attr_type| attr_type.is_valid())
+    }
+
+    /// Return whether the `ReportHandler` is internally consistent. Attribute offsets need not
+    /// be contiguous, since `remove_attr` leaves gaps, but every attribute must fit in a `Report`
+    /// and the attributes cannot overlap.
+    fn is_valid(&self) -> bool {
+        let attr_count = self.attr_types.len();
+        if self.attr_sizes.len() != attr_count
+            || self.attr_offsets.len() != attr_count
+            || self.attr_filters.len() != attr_count
+        {
+            return false;
+        }
+
+        if !Self::is_valid_attr_types(&self.attr_types)
+            || !Self::is_valid_attr_sizes(&self.attr_sizes)
+        {
+            return false;
+        }
+
+        // Every attribute size is now at most the report size, so this cannot underflow.
+        let report_bit_size = U32_SIZE * size_of::<u32>() * 8;
+        let mut used_bits = Report::<U32_SIZE>::new();
+        for (attr_index, attr_type) in self.attr_types.iter().enumerate() {
+            let attr_size = self.attr_sizes[attr_index];
+            let attr_offset = self.attr_offsets[attr_index];
+            let attr_filter = self.attr_filters[attr_index];
+
+            if attr_size != attr_type.get_size() || attr_offset > report_bit_size - attr_size {
+                return false;
+            }
+
+            if attr_filter != Self::make_attr_filter(attr_size, attr_offset) {
+                return false;
+            }
+
+            if used_bits & attr_filter != Report::<U32_SIZE>::new() {
+                return false;
+            }
+            used_bits |= attr_filter;
+        }
+
+        self.report_filter == Self::make_report_filter(&self.attr_filters)
+            && self.report_filter_cat_only
+                == Self::make_report_filter_cat_only(&self.attr_types, &self.attr_filters)
     }
 
     pub(crate) fn new(attr_types: &[AttributeType]) -> Self {
@@ -790,6 +868,58 @@ mod tests {
             report_handler.attr_offsets,
             report_handler_copy.attr_offsets
         );
+
+        // Removing an attribute leaves a gap in the offsets, which must still deserialize.
+        let mut report_handler = ReportHandler::<2>::new(&attr_types);
+        report_handler.remove_attr(2);
+        let encoded = bincode::serialize(&report_handler).unwrap();
+        let report_handler_copy: ReportHandler<2> = bincode::deserialize(&encoded).unwrap();
+        assert_eq!(report_handler, report_handler_copy);
+    }
+
+    #[test]
+    fn test_deserialize_invalid() {
+        let attr_types = vec![AttributeType::C2, AttributeType::N3(5), AttributeType::C4];
+        let report_handler = ReportHandler::<1>::new(&attr_types);
+
+        let assert_deserialize_fails = |report_handler: &ReportHandler<1>| {
+            let encoded = bincode::serialize(report_handler).unwrap();
+            assert!(bincode::deserialize::<ReportHandler<1>>(&encoded).is_err());
+        };
+
+        // Offset far outside the report.
+        let mut invalid = report_handler.clone();
+        invalid.attr_offsets[1] = usize::MAX;
+        assert_deserialize_fails(&invalid);
+
+        // Filter wider than the attribute.
+        let mut invalid = report_handler.clone();
+        invalid.attr_filters[0] = Report::<1>::from_u32(!0);
+        assert_deserialize_fails(&invalid);
+
+        // Size that does not match the attribute type.
+        let mut invalid = report_handler.clone();
+        invalid.attr_sizes[0] = 3;
+        assert_deserialize_fails(&invalid);
+
+        // Overlapping attributes, with otherwise consistent filters.
+        let mut invalid = report_handler.clone();
+        invalid.attr_offsets[2] = 3;
+        invalid.attr_filters[2] = ReportHandler::<1>::make_attr_filter(4, 3);
+        invalid.report_filter = ReportHandler::<1>::make_report_filter(&invalid.attr_filters);
+        invalid.report_filter_cat_only =
+            ReportHandler::<1>::make_report_filter_cat_only(&attr_types, &invalid.attr_filters);
+        assert_deserialize_fails(&invalid);
+
+        // Mismatched lengths.
+        let mut invalid = report_handler.clone();
+        invalid.attr_types.pop();
+        assert_deserialize_fails(&invalid);
+
+        // Report filter that does not match the attribute filters.
+        let mut invalid = report_handler.clone();
+        invalid.report_filter = Report::<1>::from_u32(!0);
+        assert_deserialize_fails(&invalid);
     }
 
     #[test]

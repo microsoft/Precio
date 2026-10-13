@@ -151,6 +151,12 @@ impl<const U32_SIZE: usize> std::ops::Not for Report<U32_SIZE> {
 /// Shifts the `Report` bits to the left and assigns the result to the `Report`.
 impl<const U32_SIZE: usize> std::ops::ShlAssign<usize> for Report<U32_SIZE> {
     fn shl_assign(&mut self, shift: usize) {
+        // Shifting by the full width or more clears all bits.
+        if shift >= U32_SIZE * 32 {
+            *self = Self::new();
+            return;
+        }
+
         let shift_u32 = shift / 32;
         let shift_bits = shift % 32;
 
@@ -187,6 +193,12 @@ impl<const U32_SIZE: usize> std::ops::Shl<usize> for Report<U32_SIZE> {
 /// Shift the `Report` bits to the right and assigns the result to the `Report`.
 impl<const U32_SIZE: usize> std::ops::ShrAssign<usize> for Report<U32_SIZE> {
     fn shr_assign(&mut self, shift: usize) {
+        // Shifting by the full width or more clears all bits.
+        if shift >= U32_SIZE * 32 {
+            *self = Self::new();
+            return;
+        }
+
         let shift_u32 = shift / 32;
         let shift_bits = shift % 32;
 
@@ -274,6 +286,9 @@ mod tests {
         assert_eq!(report << 1, [0x2468ACF0, 0xECA8642].as_slice());
         assert_eq!(report << 32, [0, 0x12345678].as_slice());
         assert_eq!(report << 4, [0x23456780, 0x76543211].as_slice());
+        assert_eq!(report << 64, [0, 0].as_slice());
+        assert_eq!(report << 100, [0, 0].as_slice());
+        assert_eq!(report << usize::MAX, [0, 0].as_slice());
     }
 
     #[test]
@@ -289,6 +304,9 @@ mod tests {
         assert_eq!(report >> 1, [0x891A2B3C, 0x43B2A190].as_slice());
         assert_eq!(report >> 32, [0x87654321, 0].as_slice());
         assert_eq!(report >> 4, [0x11234567, 0x8765432].as_slice());
+        assert_eq!(report >> 64, [0, 0].as_slice());
+        assert_eq!(report >> 100, [0, 0].as_slice());
+        assert_eq!(report >> usize::MAX, [0, 0].as_slice());
     }
 
     #[test]

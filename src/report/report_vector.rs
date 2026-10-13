@@ -14,9 +14,38 @@ use std::cmp::max;
 
 /// A `ReportVector` represents a collection of `Report`s.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "UncheckedReportVector<U32_SIZE>")]
 pub struct ReportVector<const U32_SIZE: usize> {
     report_handler: ReportHandler<U32_SIZE>,
     reports: Vec<Report<U32_SIZE>>,
+}
+
+/// A `ReportVector` as deserialized, before its `Report`s have been validated.
+#[derive(Deserialize)]
+struct UncheckedReportVector<const U32_SIZE: usize> {
+    report_handler: ReportHandler<U32_SIZE>,
+    reports: Vec<Report<U32_SIZE>>,
+}
+
+impl<const U32_SIZE: usize> TryFrom<UncheckedReportVector<U32_SIZE>> for ReportVector<U32_SIZE> {
+    type Error = String;
+
+    fn try_from(unchecked: UncheckedReportVector<U32_SIZE>) -> Result<Self, Self::Error> {
+        // Deserialization bypasses `push`, so check the `Report`s here instead.
+        let report_handler = unchecked.report_handler;
+        if let Some(report) = unchecked
+            .reports
+            .iter()
+            .find(|report| !report_handler.is_valid_report(report))
+        {
+            return Err(format!("Invalid report {:?}.", report));
+        }
+
+        Ok(Self {
+            report_handler,
+            reports: unchecked.reports,
+        })
+    }
 }
 
 pub struct ReportVectorIterator<'a, const U32_SIZE: usize> {
@@ -617,6 +646,34 @@ mod tests {
         let report_vector_copy: ReportVector<3> = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(report_vector_copy, report_vector);
+    }
+
+    #[test]
+    fn test_deserialize_invalid_report() {
+        use AttributeType::*;
+
+        let mut rng = OsRng;
+        let mut report_vector = ReportVector::<1>::new(&[C8, N3(5)]);
+        report_vector.push(
+            report_vector
+                .report_handler()
+                .create_random_report(&mut rng),
+        );
+
+        let assert_deserialize_fails = |report_vector: &ReportVector<1>| {
+            let encoded = bincode::serialize(report_vector).unwrap();
+            assert!(bincode::deserialize::<ReportVector<1>>(&encoded).is_err());
+        };
+
+        // Bits set outside of any attribute.
+        let mut invalid = report_vector.clone();
+        invalid.reports[0] = Report::<1>::from_u32(!0);
+        assert_deserialize_fails(&invalid);
+
+        // Numerical attribute value that is not reduced modulo its modulus.
+        let mut invalid = report_vector.clone();
+        invalid.reports[0] = Report::<1>::from_u32(6 << 8);
+        assert_deserialize_fails(&invalid);
     }
 
     #[test]
