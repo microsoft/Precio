@@ -1,6 +1,6 @@
 [package]
 name = "precio"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 authors = [ "Kim Laine <kim.laine@microsoft.com>", ]
 readme = "README.md"
@@ -14,7 +14,7 @@ exclude = [
 ]
 
 [dependencies]
-rand = "0.8.5"
+rand = "0.8.6"
 serde = { version = "1.0", features = [ "derive" ] }
 serde_arrays = "0.1.0"
 rand_distr = "0.4.3"
